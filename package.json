@@ -1,0 +1,8 @@
+{
+  "name": "sirekan-v2",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
