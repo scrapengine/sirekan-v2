@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { 
+  Filter, 
+  ChevronDown, 
+  Plus, 
+  Trash2, 
+  Edit, 
+  Eye, 
+  Trash, 
+  Minus, 
+  Download, 
+  Upload, 
+  ChevronUp, 
+  ChevronsUpDown 
+} from 'lucide-react';
 import client from '@/api/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Filter, ChevronDown, Plus, Trash2, Edit, Eye, Trash, Minus, Download, FileSpreadsheet } from 'lucide-react';
 
 interface NodeBItem {
   idnodeb: number;
@@ -15,6 +28,7 @@ interface NodeBItem {
   ip_metro: string;
   port_metro: string;
   hostname_olt: string;
+  ip_olt: string;
   port_onu: string;
   hostname_ont: string;
   ip_ont: string;
@@ -42,9 +56,30 @@ export const NodeBTable: React.FC = () => {
   const [selectedNodeB, setSelectedNodeB] = useState<NodeBItem | null>(null);
 
   const [columnVisibility, setColumnVisibility] = useState<{ [key: string]: boolean }>({
-    action: true, number: true, idsto: true, site_id: true, site_name: true,
-    hostname_metro: true, port_metro: true, ip_olt: true, port_onu: true, 
-    ip_ont: true, serial_number: true,
+    action: true, 
+    number: true, 
+    idsto: true, 
+    site_id: true, 
+    site_name: true,
+    hostname_metro: true, 
+    ip_metro: false, 
+    port_metro: true, 
+    ip_olt: true, 
+    port_onu: true, 
+    ip_ont: true, 
+    serial_number: true, 
+    hostname_olt: false, 
+    hostname_ont: false,
+    ont_type: false, 
+    odc: false, 
+    odp: false, 
+    tikor_site: false, 
+    on_air: false,
+  });
+
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ 
+    key: 'on_air', 
+    direction: 'desc' 
   });
 
   const columnsDef = [
@@ -54,14 +89,35 @@ export const NodeBTable: React.FC = () => {
     { key: 'site_id', label: 'Site ID' },
     { key: 'site_name', label: 'Site Name' },
     { key: 'hostname_metro', label: 'Hostname Metro' },
+    { key: 'ip_metro', label: 'IP Metro' },
     { key: 'port_metro', label: 'Port Metro' },
+    { key: 'hostname_olt', label: 'Hostname OLT' },
     { key: 'ip_olt', label: 'IP OLT' },
     { key: 'port_onu', label: 'Port Onu' },
+    { key: 'hostname_ont', label: 'Hostname ONT' },
     { key: 'ip_ont', label: 'IP ONT' },
+    { key: 'ont_type', label: 'ONT Type' },
     { key: 'serial_number', label: 'Serial Number' },
+    { key: 'odc', label: 'ODC' },
+    { key: 'odp', label: 'ODP' },
+    { key: 'tikor_site', label: 'Coordinate' },
+    { key: 'on_air', label: 'On Air' },
   ];
 
   const toggleColumn = (key: string) => setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: string) => {
+    if (sortConfig.key !== key) return <ChevronsUpDown size={12} className="text-slate-500" />;
+    return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-orbit-primary" /> : <ChevronDown size={12} className="text-orbit-primary" />;
+  };
 
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearch(search), 400);
@@ -72,13 +128,23 @@ export const NodeBTable: React.FC = () => {
     setLoading(true);
     try {
       const res = await client.get('/api/master-data/nodeb', { 
-        params: { page: currentPage, limit: pageSize, search: debouncedSearch } 
+        params: { 
+          page: currentPage, 
+          limit: pageSize, 
+          search: debouncedSearch, 
+          sort_by: sortConfig.key, 
+          order: sortConfig.direction 
+        } 
       });
       setData(res.data.data);
       setTotal(res.data.meta.total);
       setTotalPages(res.data.meta.total_pages);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  }, [currentPage, pageSize, debouncedSearch]);
+    } catch (err) { 
+      console.error(err); 
+    } finally { 
+      setLoading(false); 
+    }
+  }, [currentPage, pageSize, debouncedSearch, sortConfig.key, sortConfig.direction]);
 
   const handleDelete = async (id: number) => {
     if (confirm('Are you sure you want to delete this data? It will be moved to trash.')) {
@@ -91,13 +157,9 @@ export const NodeBTable: React.FC = () => {
     }
   };
 
-  const handleShowDetail = (item: NodeBItem) => {
-    setSelectedNodeB(item);
-    setShowDetailModal(true);
-  };
-
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { 
+    fetchData(); 
+  }, [fetchData]);
 
   return (
     <div className="p-6 space-y-6 h-screen overflow-y-auto bg-orbit-bg text-sm">
@@ -109,22 +171,114 @@ export const NodeBTable: React.FC = () => {
         {showFilter && (
           <div className="mt-4 border-t pt-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <select className="border p-2 rounded-lg text-sm"><option>On Air</option></select>
-              <input type="date" className="border p-2 rounded-lg text-sm" />
-              <input type="date" className="border p-2 rounded-lg text-sm" />
+              <select className="border p-2 rounded-lg text-sm" name="dateParam">
+                <option value="on_air">On Air</option>
+                <option value="created_at">Created At</option>
+              </select>
+              <input type="date" name="fromdate" className="border p-2 rounded-lg text-sm" />
+              <input type="date" name="untildate" className="border p-2 rounded-lg text-sm" />
             </div>
             {dynamicFilters.map(f => (
               <div key={f.id} className="grid grid-cols-12 gap-2 mt-2">
-                <select className="col-span-4 border p-2 rounded-lg text-sm"><option>Site ID</option></select>
-                <input className="col-span-7 border p-2 rounded-lg text-sm" placeholder="Value" />
-                <Button size="icon" variant="ghost" onClick={() => setDynamicFilters(prev => prev.filter(x => x.id !== f.id))} className="text-red-500"><Minus size={16}/></Button>
+                <select name="choice[]" className="col-span-4 border p-2 rounded-lg text-sm">
+                  <option value="site_id">Site ID</option>
+                  <option value="site_name">Site Name</option>
+                  <option value="idsto">STO</option>
+                  <option value="hostname_metro">Hostname Metro</option>
+                  <option value="hostname_olt">Hostname OLT</option>
+                  <option value="ip_olt">IP OLT</option>
+                  <option value="serial_number">SN</option>
+                  <option value="odc">ODC</option>
+                  <option value="odp">ODP</option>
+                </select>
+                <input name="values[]" className="col-span-7 border p-2 rounded-lg text-sm" placeholder="Value" />
+                <Button size="icon" variant="ghost" onClick={() => setDynamicFilters(prev => prev.filter(x => x.id !== f.id))} className="text-red-500">
+                  <Minus size={16}/>
+                </Button>
               </div>
             ))}
             <div className="flex justify-center gap-2 mt-4">
-              <Button size="sm" variant="outline"><Download size={14}/> Export</Button>
-              <Button size="sm">Search Table</Button>
-              <Button size="sm" variant="secondary"><FileSpreadsheet size={14}/> Import</Button>
-              <Button size="sm" variant="accent" onClick={() => setDynamicFilters([...dynamicFilters, { id: Date.now() }])}><Plus size={14}/></Button>
+              <Button size="sm" variant="outline" onClick={async () => {
+                try {
+                  const params: any = {};
+                  const dateParamVal = (document.querySelector("select[name='dateParam']") as HTMLSelectElement)?.value;
+                  const fromDateVal = (document.querySelector("input[name='fromdate']") as HTMLInputElement)?.value;
+                  const untilDateVal = (document.querySelector("input[name='untildate']") as HTMLInputElement)?.value;
+                  
+                  if (dateParamVal) params.dateParam = dateParamVal;
+                  if (fromDateVal) params.fromdate = fromDateVal;
+                  if (untilDateVal) params.untildate = untilDateVal;
+                  
+                  const choiceSelects = document.querySelectorAll("select[name='choice[]']");
+                  const valueInputs = document.querySelectorAll("input[name='values[]']");
+                  const choices = Array.from(choiceSelects).map(s => (s as HTMLSelectElement).value);
+                  const values = Array.from(valueInputs).map(i => (i as HTMLInputElement).value);
+                  
+                  choices.forEach((c, i) => { if(c && c !== 'cancel' && values[i]) { 
+                    if (!params.choice) params.choice = [];
+                    if (!params.values) params.values = [];
+                    params.choice.push(c);
+                    params.values.push(values[i]);
+                  }});
+                  
+                  const response = await client.get('/api/master-data/nodeb/export', { params, responseType: 'blob' });
+                  const url = window.URL.createObjectURL(new Blob([response.data]));
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.setAttribute('download', `NODEB-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${new Date().getHours()}${new Date().getMinutes()}${new Date().getSeconds()}.xlsx`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                } catch (err) {
+                  console.error('Export failed', err);
+                }
+              }}>
+                <Download size={14}/> Export
+              </Button>
+              <Button size="sm" onClick={() => {
+                const params: any = {};
+                const dateParamVal = (document.querySelector("select[name='dateParam']") as HTMLSelectElement)?.value;
+                const fromDateVal = (document.querySelector("input[name='fromdate']") as HTMLInputElement)?.value;
+                const untilDateVal = (document.querySelector("input[name='untildate']") as HTMLInputElement)?.value;
+                
+                if (dateParamVal) params.dateParam = dateParamVal;
+                if (fromDateVal) params.fromdate = fromDateVal;
+                if (untilDateVal) params.untildate = untilDateVal;
+                
+                const choiceSelects = document.querySelectorAll("select[name='choice[]']");
+                const valueInputs = document.querySelectorAll("input[name='values[]']");
+                const choices = Array.from(choiceSelects).map(s => (s as HTMLSelectElement).value);
+                const values = Array.from(valueInputs).map(i => (i as HTMLInputElement).value);
+                
+                choices.forEach((c, i) => { if(c && c !== 'cancel' && values[i]) { 
+                  if (!params.choice) params.choice = [];
+                  if (!params.values) params.values = [];
+                  params.choice.push(c);
+                  params.values.push(values[i]);
+                }});
+                
+                client.get('/api/master-data/nodeb', { params })
+                  .then(res => {
+                    setData(res.data.data);
+                    setTotal(res.data.meta.total);
+                    setTotalPages(res.data.meta.total_pages);
+                  });
+              }}>
+                Search Table
+              </Button>
+              <label className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-xs flex items-center gap-1">
+                <Upload size={14}/> Import
+                <input type="file" className="hidden" onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    const formData = new FormData();
+                    formData.append('file_excel', e.target.files[0]);
+                    client.post('/api/master-data/nodeb/import', formData).then(() => { alert('Import OK'); fetchData(); });
+                  }
+                }} />
+              </label>
+              <Button size="sm" variant="accent" onClick={() => setDynamicFilters([...dynamicFilters, { id: Date.now() }])}>
+                <Plus size={14}/>
+              </Button>
             </div>
             <p className="text-center text-xs text-gray-400 mt-2">Click + to show another search parameter</p>
           </div>
@@ -147,17 +301,22 @@ export const NodeBTable: React.FC = () => {
         <div className="flex justify-between items-center mb-4">
           <div className="flex gap-2 items-center">
             <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="border p-1.5 rounded-lg text-xs">
-              <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={-1}>∞</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={-1}>∞</option>
             </select>
             <input placeholder="Search..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="border p-1.5 rounded-lg text-xs w-48" />
           </div>
-          <Button size="sm" variant="outline" onClick={() => setShowColDropdown(!showColDropdown)}>Columns <ChevronDown size={14}/></Button>
+          <Button size="sm" variant="outline" onClick={() => setShowColDropdown(!showColDropdown)}>
+            Columns <ChevronDown size={14}/>
+          </Button>
         </div>
 
         {showColDropdown && (
-          <div className="absolute z-50 bg-white border rounded shadow p-2 text-xs space-y-1 right-6">
+          <div className="absolute z-50 bg-white border rounded shadow p-2 text-xs space-y-1 right-6 text-black">
             {columnsDef.map(col => (
-              <label key={col.key} className="flex items-center gap-2 hover:bg-gray-50 p-1">
+              <label key={col.key} className="flex items-center gap-2 hover:bg-gray-50 p-1 cursor-pointer">
                 <input type="checkbox" checked={columnVisibility[col.key]} onChange={() => toggleColumn(col.key)} /> {col.label}
               </label>
             ))}
@@ -166,34 +325,57 @@ export const NodeBTable: React.FC = () => {
 
         {loading ? <div className="p-10 text-center">Loading...</div> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+            <table className="w-full text-xs text-left border-collapse">
               <thead className="bg-orbit-surface2 border-b border-orbit-border">
-                <tr>{columnsDef.map(col => columnVisibility[col.key] && <th key={col.key} className="p-3 text-slate-300">{col.label}</th>)}</tr>
+                <tr>
+                  {columnsDef.map(col => columnVisibility[col.key] && (
+                    <th 
+                      key={col.key} 
+                      className="p-3 text-slate-300 cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => col.key !== 'action' && col.key !== 'number' && handleSort(col.key)}
+                    >
+                      <div className="flex items-center gap-1">
+                        {col.label}
+                        {col.key !== 'action' && col.key !== 'number' && getSortIcon(col.key)}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
               </thead>
               <tbody className="divide-y divide-orbit-border">
                 {data.map((item, idx) => (
                   <tr key={item.idnodeb} className="hover:bg-white/5 transition-colors">
                     {columnVisibility.action && (
-                      <td className="p-3 flex items-center gap-1 text-slate-400">
-                        <Link to={`/wan/nodeb/detail/${item.idnodeb}/${item.site_id.toLowerCase().replace(/\s+/g, '-')}`}>
-                          <Eye size={14} className="hover:text-orbit-primary transition-colors"/>
-                        </Link>
-                        <Link to={`/wan/nodeb/edit/${item.idnodeb}`}>
-                          <Edit size={14} className="text-yellow-600 cursor-pointer hover:text-yellow-500 transition-colors"/>
-                        </Link>
-                        <Trash size={14} onClick={() => handleDelete(item.idnodeb)} className="text-red-600 cursor-pointer hover:text-red-500 transition-colors"/>
+                      <td className="p-3 text-slate-400 align-middle">
+                        <div className="flex items-center gap-1">
+                          <Link to={`/wan/nodeb/detail/${item.idnodeb}/${item.site_id.toLowerCase().replace(/\s+/g, '-')}`}>
+                            <Eye size={14} className="hover:text-orbit-primary transition-colors"/>
+                          </Link>
+                          <Link to={`/wan/nodeb/edit/${item.idnodeb}`}>
+                            <Edit size={14} className="text-yellow-600 cursor-pointer hover:text-yellow-500 transition-colors"/>
+                          </Link>
+                          <Trash size={14} onClick={() => handleDelete(item.idnodeb)} className="text-red-600 cursor-pointer hover:text-red-500 transition-colors"/>
+                        </div>
                       </td>
                     )}
-                    {columnVisibility.number && <td className="p-3 text-slate-400">{(currentPage - 1) * pageSize + idx + 1}</td>}
-                    {columnVisibility.idsto && <td className="p-3 text-slate-400">{item.sto}</td>}
-                    {columnVisibility.site_id && <td className="p-3 font-semibold text-slate-100">{item.site_id}</td>}
-                    {columnVisibility.site_name && <td className="p-3 text-slate-400">{item.site_name}</td>}
-                    {columnVisibility.hostname_metro && <td className="p-3 text-slate-400">{item.hostname_metro}</td>}
-                    {columnVisibility.port_metro && <td className="p-3 text-slate-400">{item.port_metro}</td>}
-                    {columnVisibility.ip_olt && <td className="p-3 text-slate-400">{item.ip_olt}</td>}
-                    {columnVisibility.port_onu && <td className="p-3 text-slate-400">{item.port_onu}</td>}
-                    {columnVisibility.ip_ont && <td className="p-3 text-slate-400">{item.ip_ont}</td>}
-                    {columnVisibility.serial_number && <td className="p-3 text-slate-400">{item.serial_number}</td>}
+                    {columnVisibility.number && <td className="p-3 text-slate-400 align-middle">{(currentPage - 1) * pageSize + idx + 1}</td>}
+                    {columnVisibility.idsto && <td className="p-3 text-slate-400 align-middle">{item.sto}</td>}
+                    {columnVisibility.site_id && <td className="p-3 font-semibold text-slate-100 align-middle">{item.site_id}</td>}
+                    {columnVisibility.site_name && <td className="p-3 text-slate-400 align-middle">{item.site_name}</td>}
+                    {columnVisibility.hostname_metro && <td className="p-3 text-slate-400 align-middle">{item.hostname_metro}</td>}
+                    {columnVisibility.ip_metro && <td className="p-3 text-slate-400 align-middle">{item.ip_metro}</td>}
+                    {columnVisibility.port_metro && <td className="p-3 text-slate-400 align-middle">{item.port_metro}</td>}
+                    {columnVisibility.hostname_olt && <td className="p-3 text-slate-400 align-middle">{item.hostname_olt}</td>}
+                    {columnVisibility.ip_olt && <td className="p-3 text-slate-400 align-middle">{item.ip_olt}</td>}
+                    {columnVisibility.port_onu && <td className="p-3 text-slate-400 align-middle">{item.port_onu}</td>}
+                    {columnVisibility.hostname_ont && <td className="p-3 text-slate-400 align-middle">{item.hostname_ont}</td>}
+                    {columnVisibility.ip_ont && <td className="p-3 text-slate-400 align-middle">{item.ip_ont}</td>}
+                    {columnVisibility.ont_type && <td className="p-3 text-slate-400 align-middle">{item.ont_type}</td>}
+                    {columnVisibility.serial_number && <td className="p-3 text-slate-400 align-middle">{item.serial_number}</td>}
+                    {columnVisibility.odc && <td className="p-3 text-slate-400 align-middle">{item.odc}</td>}
+                    {columnVisibility.odp && <td className="p-3 text-slate-400 align-middle">{item.odp}</td>}
+                    {columnVisibility.tikor_site && <td className="p-3 text-slate-400 align-middle">{item.tikor_site}</td>}
+                    {columnVisibility.on_air && <td className="p-3 text-slate-400 align-middle">{item.on_air}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -230,4 +412,3 @@ export const NodeBTable: React.FC = () => {
     </div>
   );
 };
-export default NodeBTable;
