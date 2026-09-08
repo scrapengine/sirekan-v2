@@ -119,6 +119,16 @@ export const NodeBTable: React.FC = () => {
     return sortConfig.direction === 'asc' ? <ChevronUp size={12} className="text-orbit-primary" /> : <ChevronDown size={12} className="text-orbit-primary" />;
   };
 
+  const SkeletonRow = () => (
+    <tr className="animate-pulse">
+      {columnsDef.map(col => columnVisibility[col.key] && (
+        <td key={col.key} className="p-3">
+          <div className="h-4 bg-slate-800 rounded w-full"></div>
+        </td>
+      ))}
+    </tr>
+  );
+
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(handler);
@@ -323,28 +333,30 @@ export const NodeBTable: React.FC = () => {
           </div>
         )}
 
-        {loading ? <div className="p-10 text-center">Loading...</div> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left border-collapse">
-              <thead className="bg-orbit-surface2 border-b border-orbit-border">
-                <tr>
-                  {columnsDef.map(col => columnVisibility[col.key] && (
-                    <th 
-                      key={col.key} 
-                      className="p-3 text-slate-300 cursor-pointer select-none whitespace-nowrap"
-                      onClick={() => col.key !== 'action' && col.key !== 'number' && handleSort(col.key)}
-                    >
-                      <div className="flex items-center gap-1">
-                        {col.label}
-                        {col.key !== 'action' && col.key !== 'number' && getSortIcon(col.key)}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-orbit-border">
-                {data.map((item, idx) => (
-                  <tr key={item.idnodeb} className="hover:bg-white/5 transition-colors">
+        <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
+          <table className="w-full text-xs text-left border-collapse">
+            <thead className="bg-orbit-surface border-b border-orbit-border sticky top-0 z-10">
+              <tr>
+                {columnsDef.map(col => columnVisibility[col.key] && (
+                  <th 
+                    key={col.key} 
+                    className="p-3 text-slate-300 cursor-pointer select-none whitespace-nowrap bg-orbit-surface"
+                    onClick={() => col.key !== 'action' && col.key !== 'number' && handleSort(col.key)}
+                  >
+                    <div className="flex items-center gap-1">
+                      {col.label}
+                      {col.key !== 'action' && col.key !== 'number' && getSortIcon(col.key)}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-orbit-border">
+              {loading && data.length === 0 ? (
+                Array.from({ length: pageSize > 0 ? pageSize : 10 }).map((_, i) => <SkeletonRow key={i} />)
+              ) : (
+                data.map((item, idx) => (
+                  <tr key={item.idnodeb} className="hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors">
                     {columnVisibility.action && (
                       <td className="p-3 text-slate-400 align-middle">
                         <div className="flex items-center gap-1">
@@ -377,11 +389,11 @@ export const NodeBTable: React.FC = () => {
                     {columnVisibility.tikor_site && <td className="p-3 text-slate-400 align-middle">{item.tikor_site}</td>}
                     {columnVisibility.on_air && <td className="p-3 text-slate-400 align-middle">{item.on_air}</td>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         <div className="flex justify-between items-center mt-4 text-xs text-slate-400">
           <span>Menampilkan {data.length} dari {total} records</span>
