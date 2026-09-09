@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Filter, 
@@ -12,7 +12,8 @@ import {
   Download, 
   Upload, 
   ChevronUp, 
-  ChevronsUpDown 
+  ChevronsUpDown,
+  FileSpreadsheet
 } from 'lucide-react';
 import client from '@/api/client';
 import { Card } from '@/components/ui/Card';
@@ -53,7 +54,9 @@ export const NodeBTable: React.FC = () => {
   const [showColDropdown, setShowColDropdown] = useState(false);
   const [dynamicFilters, setDynamicFilters] = useState<{id: number}[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedNodeB, setSelectedNodeB] = useState<NodeBItem | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [columnVisibility, setColumnVisibility] = useState<{ [key: string]: boolean }>({
     action: true, 
@@ -167,6 +170,19 @@ export const NodeBTable: React.FC = () => {
     }
   };
 
+  const handleImport = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file_excel', file);
+    try {
+      await client.post('/api/master-data/nodeb/import', formData);
+      alert('Import berhasil');
+      fetchData();
+      setShowImportModal(false);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Import gagal');
+    }
+  };
+
   useEffect(() => { 
     fetchData(); 
   }, [fetchData]);
@@ -245,47 +261,40 @@ export const NodeBTable: React.FC = () => {
               }}>
                 <Download size={14}/> Export
               </Button>
-              <Button size="sm" onClick={() => {
-                const params: any = {};
-                const dateParamVal = (document.querySelector("select[name='dateParam']") as HTMLSelectElement)?.value;
-                const fromDateVal = (document.querySelector("input[name='fromdate']") as HTMLInputElement)?.value;
-                const untilDateVal = (document.querySelector("input[name='untildate']") as HTMLInputElement)?.value;
+              <Button size="sm" variant="outline" onClick={() => {
+                              const params: any = {};
+                              const dateParamVal = (document.querySelector("select[name='dateParam']") as HTMLSelectElement)?.value;
+                              const fromDateVal = (document.querySelector("input[name='fromdate']") as HTMLInputElement)?.value;
+                              const untilDateVal = (document.querySelector("input[name='untildate']") as HTMLInputElement)?.value;
                 
-                if (dateParamVal) params.dateParam = dateParamVal;
-                if (fromDateVal) params.fromdate = fromDateVal;
-                if (untilDateVal) params.untildate = untilDateVal;
+                              if (dateParamVal) params.dateParam = dateParamVal;
+                              if (fromDateVal) params.fromdate = fromDateVal;
+                              if (untilDateVal) params.untildate = untilDateVal;
                 
-                const choiceSelects = document.querySelectorAll("select[name='choice[]']");
-                const valueInputs = document.querySelectorAll("input[name='values[]']");
-                const choices = Array.from(choiceSelects).map(s => (s as HTMLSelectElement).value);
-                const values = Array.from(valueInputs).map(i => (i as HTMLInputElement).value);
+                              const choiceSelects = document.querySelectorAll("select[name='choice[]']");
+                              const valueInputs = document.querySelectorAll("input[name='values[]']");
+                              const choices = Array.from(choiceSelects).map(s => (s as HTMLSelectElement).value);
+                              const values = Array.from(valueInputs).map(i => (i as HTMLInputElement).value);
                 
-                choices.forEach((c, i) => { if(c && c !== 'cancel' && values[i]) { 
-                  if (!params.choice) params.choice = [];
-                  if (!params.values) params.values = [];
-                  params.choice.push(c);
-                  params.values.push(values[i]);
-                }});
+                              choices.forEach((c, i) => { if(c && c !== 'cancel' && values[i]) { 
+                                if (!params.choice) params.choice = [];
+                                if (!params.values) params.values = [];
+                                params.choice.push(c);
+                                params.values.push(values[i]);
+                              }});
                 
-                client.get('/api/master-data/nodeb', { params })
-                  .then(res => {
-                    setData(res.data.data);
-                    setTotal(res.data.meta.total);
-                    setTotalPages(res.data.meta.total_pages);
-                  });
-              }}>
-                Search Table
-              </Button>
-              <label className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-xs flex items-center gap-1">
-                <Upload size={14}/> Import
-                <input type="file" className="hidden" onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    const formData = new FormData();
-                    formData.append('file_excel', e.target.files[0]);
-                    client.post('/api/master-data/nodeb/import', formData).then(() => { alert('Import OK'); fetchData(); });
-                  }
-                }} />
-              </label>
+                              client.get('/api/master-data/nodeb', { params })
+                                .then(res => {
+                                  setData(res.data.data);
+                                  setTotal(res.data.meta.total);
+                                  setTotalPages(res.data.meta.total_pages);
+                                });
+                            }}>
+                              Search Table
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setShowImportModal(true)}>
+                              <Upload size={14}/> Import
+                            </Button>
               <Button size="sm" variant="accent" onClick={() => setDynamicFilters([...dynamicFilters, { id: Date.now() }])}>
                 <Plus size={14}/>
               </Button>
@@ -406,20 +415,30 @@ export const NodeBTable: React.FC = () => {
       </Card>
 
       <Modal
-        isOpen={showDetailModal}
-        onClose={() => setShowDetailModal(false)}
-        title="Detail Data Node-B"
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        title="Import Data Node-B"
       >
-        {selectedNodeB && (
-          <div className="grid grid-cols-2 gap-4 text-slate-300">
-            {Object.entries(selectedNodeB).map(([key, value]) => (
-              <div key={key}>
-                <p className="font-semibold text-slate-400 text-xs uppercase mb-1">{key.replace(/_/g, ' ')}</p>
-                <p className="text-sm">{value !== null ? String(value) : '-'}</p>
-              </div>
-            ))}
+        <div className="space-y-4">
+          <div 
+            className="border-2 border-dashed border-orbit-border p-8 text-center rounded-lg hover:bg-slate-800/20 cursor-pointer transition"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files?.[0]) handleImport(e.dataTransfer.files[0]);
+            }}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mx-auto text-slate-500 mb-2" size={32}/>
+            <p className="text-slate-300">Drag & Drop file Excel di sini atau klik untuk pilih file</p>
+            <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])} />
           </div>
-        )}
+          <div className="flex justify-center">
+            <a href="/templates/nodeb-template.xlsx" download className="inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orbit-primary focus-visible:ring-offset-2 focus-visible:ring-offset-orbit-bg disabled:pointer-events-none disabled:opacity-40 select-none border border-orbit-border text-slate-300 hover:border-orbit-border2 hover:bg-white/5 active:scale-[0.98] h-8 px-3 text-xs">
+                          <FileSpreadsheet size={14} className="mr-2"/> Download Template
+                        </a>
+          </div>
+        </div>
       </Modal>
     </div>
   );

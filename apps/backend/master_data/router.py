@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Request
+import re
+import io
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, update, delete, insert
 from core.database import get_db
 from .service import process_nodeb_record
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import date
+from datetime import datetime, date
+import pandas as pd
+from openpyxl import load_workbook
 
 router = APIRouter(prefix="/master-data")
 
@@ -135,24 +139,22 @@ async def get_nodeb(
 
 @router.get("/nodeb/trash")
 async def get_trash_nodeb(
+    request: Request,
     page: int = 1,
     limit: int = 25,
     search: str = "",
-    fromdate: str = "",
-    untildate: str = "",
+    fromdate: Optional[str] = Query(None),
+    untildate: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("deleted_at"),
+    order: Optional[str] = Query("desc"),
     db: AsyncSession = Depends(get_db)
 ):
     offset = (page - 1) * limit
-    base_from = """
-        FROM datanodeb n
-        LEFT JOIN cacti c ON c.idnodeb = n.idnodeb
-        LEFT JOIN dataont ont ON ont.serial_number = n.serial_number
-        LEFT JOIN datasto sto ON sto.idsto = n.idsto
-        LEFT JOIN datametro m ON m.hostname_metro = n.hostname_metro
-        LEFT JOIN dataolt olt ON olt.hostname_olt = n.hostname_olt
-        WHERE n.deleted_at IS NOT NULL
-    """
-    count_query = f"SELECT COUNT(DISTINCT n.idnodeb) {base_from}"
+    
+    # Parse query params manually for array support
+    choice = request.query_params.getlist('choice[]') or request.query_params.getlist('choice')
+    values = request.query_params.getlist('values[]') or request.query_params.getlist('values')
+
     select_fields = """
         n.idnodeb, n.idsto AS idsto_nodeb, n.site_id, n.site_name, 
         n.hostname_metro AS hostname_metro_nodeb, n.port_metro AS port_metro_nodeb,
@@ -163,26 +165,76 @@ async def get_trash_nodeb(
         sto.idsto,
         m.hostname_metro, n.deleted_at
     """
-    data_query = f"SELECT {select_fields} {base_from}"
-    if search:
-        where_clause = """ AND (
-            n.site_id LIKE :search OR n.site_name LIKE :search OR 
-            n.hostname_olt LIKE :search OR n.hostname_ont LIKE :search OR n.serial_number LIKE :search
-        )"""
-        data_query += where_clause
-        count_query += where_clause
-        search_param = f"%{search}%"
-    else:
-        search_param = ""
+    base_from = """
+        FROM datanodeb n
+        LEFT JOIN cacti c ON c.idnodeb = n.idnodeb
+        LEFT JOIN dataont ont ON ont.serial_number = n.serial_number
+        LEFT JOIN datasto sto ON sto.idsto = n.idsto
+        LEFT JOIN datametro m ON m.hostname_metro = n.hostname_metro
+        LEFT JOIN dataolt olt ON olt.hostname_olt = n.hostname_olt
+        WHERE n.deleted_at IS NOT NULL
+    """
+    where_clauses = []
+    params = {"limit": limit, "offset": offset}
 
-    data_query += " GROUP BY n.idnodeb ORDER BY n.deleted_at DESC LIMIT :limit OFFSET :offset"
+    if fromdate and untildate:
+        db_date_col = "n.deleted_at"
+        where_clauses.append(f"{db_date_col} BETWEEN :fromdate AND :untildate")
+        params["fromdate"] = f"{fromdate} 00:00:00"
+        params["untildate"] = f"{untildate} 23:59:59"
 
     if search:
-        total = (await db.execute(text(count_query), {"search": search_param})).scalar() or 0
-        result = await db.execute(text(data_query), {"search": search_param, "limit": limit, "offset": offset})
-    else:
-        total = (await db.execute(text(count_query))).scalar() or 0
-        result = await db.execute(text(data_query), {"limit": limit, "offset": offset})
+        where_clauses.append("(n.site_id LIKE :search OR n.site_name LIKE :search OR n.hostname_olt LIKE :search OR n.hostname_ont LIKE :search OR n.serial_number LIKE :search OR n.hostname_metro LIKE :search OR olt.ip_olt LIKE :search OR n.ip_ont LIKE :search OR n.odc LIKE :search OR n.odp LIKE :search OR n.ont_type LIKE :search)")
+        params["search"] = f"%{search}%"
+
+    if choice and values:
+        choice_clauses = []
+        for i, (c, v) in enumerate(zip(choice, values)):
+            if not v or c == "cancel": continue
+            col = c
+            if c in ["idsto", "hostname_metro", "hostname_olt", "site_id", "site_name", "port_metro", "port_onu", "hostname_ont", "ip_ont", "ont_type", "serial_number", "odc", "odp", "tikor_site", "on_air"]:
+                col = f"n.{c}"
+            elif c == "ip_olt":
+                col = "olt.ip_olt"
+            elif c == "ip_metro":
+                col = "m.ip_metro"
+            p_key = f"val_{i}"
+            choice_clauses.append(f"{col} LIKE :{p_key}")
+            params[p_key] = f"%{v}%"
+        if choice_clauses:
+            where_clauses.append("(" + " OR ".join(choice_clauses) + ")")
+    
+    # Whitelist column mapping for sorting
+    sort_mapping = {
+        "idnodeb": "n.idnodeb",
+        "deleted_at": "n.deleted_at",
+        "idsto": "n.idsto",
+        "site_id": "n.site_id",
+        "site_name": "n.site_name",
+        "hostname_metro": "n.hostname_metro",
+        "port_metro": "n.port_metro",
+        "hostname_olt": "n.hostname_olt",
+        "ip_olt": "olt.ip_olt",
+        "port_onu": "n.port_onu",
+        "hostname_ont": "n.hostname_ont",
+        "ip_ont": "n.ip_ont",
+        "ont_type": "n.ont_type",
+        "serial_number": "n.serial_number",
+        "odc": "n.odc",
+        "odp": "n.odp",
+        "tikor_site": "n.tikor_site",
+        "on_air": "n.on_air",
+    }
+    
+    order_col = sort_mapping.get(sort_by, "n.deleted_at")
+    order_dir = "ASC" if order.lower() == "asc" else "DESC"
+
+    where_str = " AND " + " AND ".join(where_clauses) if where_clauses else ""
+    count_query = f"SELECT COUNT(DISTINCT n.idnodeb) {base_from} {where_str}"
+    data_query = f"SELECT {select_fields} {base_from} {where_str} GROUP BY n.idnodeb ORDER BY {order_col} {order_dir} LIMIT :limit OFFSET :offset"
+
+    total = (await db.execute(text(count_query), params)).scalar() or 0
+    result = await db.execute(text(data_query), params)
 
     return {
         "meta": {"total": total, "page": page, "limit": limit, "total_pages": (total + limit - 1) // limit if limit > 0 else 1},
@@ -326,7 +378,86 @@ async def export_nodeb(
 
 @router.post("/nodeb/import")
 async def import_nodeb(file_excel: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    return {"status": "success"}
+    if not file_excel.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Format File Tidak Sesuai")
+        
+    try:
+        content = await file_excel.read()
+        df = pd.read_excel(io.BytesIO(content), header=None)
+        
+        async with db.begin():
+            for i, row in df.iterrows():
+                if i == 0: continue
+                
+                # Extract values (assuming 0-indexed per mapping)
+                val = row.tolist()
+                
+                # Data mapping based on legacy CI4
+                data_nodeb_insert = {
+                    'idsto': val[0],
+                    'site_id': val[1],
+                    'site_name': val[2],
+                    'hostname_metro': val[3],
+                    'port_metro': val[4],
+                    'hostname_olt': val[5],
+                    'port_onu': val[6],
+                    'hostname_ont': val[7],
+                    'ip_ont': val[8],
+                    'ont_type': val[9],
+                    'serial_number': val[10],
+                    'odc': val[11],
+                    'odp': val[12],
+                    'tikor_site': val[13],
+                    'on_air': datetime.strptime(str(val[14]), '%Y-%m-%d %H:%M:%S').date() if pd.notnull(val[14]) else None
+                }
+                
+                res = await db.execute(insert(text("datanodeb")).values(**data_nodeb_insert))
+                idnodeb = res.inserted_primary_key[0]
+                
+                # Cacti
+                if pd.notnull(val[15]):
+                    await db.execute(text("INSERT INTO cacti (graph_id, idnodeb) VALUES (:g, :id)"), {"g": val[15], "id": idnodeb})
+                    
+                # ONT & ONT Type
+                serial = str(val[10]).strip()
+                ont_raw = str(val[9]).strip()
+                if serial and serial.upper() != 'TO IPASO' and ont_raw:
+                    merk = ont_raw
+                    typ = None
+                    if '-' in ont_raw:
+                        merk, typ = [x.strip() for x in ont_raw.split('-', 1)]
+                    
+                    # ONT Type
+                    exists_type = (await db.execute(text("SELECT id FROM ont_type WHERE merk = :m AND type = :t"), {"m": merk, "t": typ})).scalar()
+                    if not exists_type:
+                        await db.execute(text("INSERT INTO ont_type (merk, type) VALUES (:m, :t)"), {"m": merk, "t": typ})
+                    
+                    # Data ONT
+                    tgl = datetime.strptime(str(val[14]), '%Y-%m-%d %H:%M:%S').date() if pd.notnull(val[14]) else None
+                    ont = (await db.execute(text("SELECT idont, merk, type, installed, desc FROM dataont WHERE serial_number = :s"), {"s": serial})).mappings().first()
+                    
+                    if not ont:
+                        await db.execute(text("INSERT INTO dataont (merk, type, serial_number, status, idsto, installed, desc) VALUES (:m, :t, :s, 'BAIK', :sto, :ins, :d)"), 
+                                        {"m": merk, "t": typ, "s": serial, "sto": val[0], "ins": tgl, "d": f"{tgl} Installed to {val[1]}" if tgl else f"Installed to {val[1]}"})
+                    else:
+                        if val[1] not in ont['desc']:
+                            new_desc = ont['desc'] + f"\n{tgl} Cascade to {val[1]}" if tgl else ont['desc'] + f"\nInstalled to {val[1]}"
+                            await db.execute(text("UPDATE dataont SET desc = :d WHERE idont = :id"), {"d": new_desc, "id": ont['idont']})
+                            
+                # datanodeb_all
+                site_id_all = val[1]
+                site_name_all = re.sub(r'\s-\s(ONT|LINK)\s\d+$', '', str(val[2]), flags=re.IGNORECASE)
+                exists_all = (await db.execute(text("SELECT id FROM datanodeb_all WHERE site_id_all = :s"), {"s": site_id_all})).scalar()
+                
+                if exists_all:
+                    await db.execute(text("UPDATE datanodeb_all SET transport = 'Metro-E Telkom' WHERE site_id_all = :s"), {"s": site_id_all})
+                else:
+                    await db.execute(text("INSERT INTO datanodeb_all (site_id_all, site_name_all, lat_long, sto, transport) VALUES (:s, :n, :l, :st, 'Metro-E Telkom')"),
+                                    {"s": site_id_all, "n": site_name_all, "l": val[13], "st": val[0]})
+                                    
+        return {"status": "success", "message": "Import berhasil"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/nodeb/{id}")
 async def get_nodeb_detail(id: int, db: AsyncSession = Depends(get_db)):
