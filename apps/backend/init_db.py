@@ -2,6 +2,7 @@ import asyncio
 from core.database import engine, Base
 from assurance.models import AssuranceTicket
 from master_data.models_nodeb import NodeB
+from core.models import User
 
 async def init_db():
     async with engine.begin() as conn:
