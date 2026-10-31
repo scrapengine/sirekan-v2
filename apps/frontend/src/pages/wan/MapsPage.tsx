@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Navigation } from 'lucide-react';
 
-import { distanceBetween, bearingBetween, formatDistance, coordinateToGoogleMaps, isValidCoordinate } from '@/utils/geo';
+import { distanceBetween, bearingBetween, formatDistance, coordinateToGoogleMaps, isValidCoordinate, slugify } from '@/utils/geo';
 
 const ICON_OPTIONS = { iconSize: [32, 32] as [number, number], iconAnchor: [16, 32] as [number, number], popupAnchor: [0, -32] as [number, number], shadowSize: [32, 32] as [number, number] };
 const blueIcon = L.icon({ iconUrl: '/icons/metro-48.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', ...ICON_OPTIONS });
@@ -68,7 +68,7 @@ const MapsPage = () => {
   const { data: mapData, isLoading } = useQuery({
     queryKey: ['maps', 'nodeb'],
     queryFn: async () => {
-      const res = await fetch('http://127.0.0.1:8001/api/master-data/maps/nodeb');
+      const res = await fetch('http://127.0.0.1:8000/api/master-data/maps/nodeb');
       if (!res.ok) throw new Error('Failed to fetch');
       return res.json();
     }
@@ -95,13 +95,13 @@ const MapsPage = () => {
     mapInstanceRef.current = map;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    controlsRef.current.scale = L.control.scale({ position: 'bottomleft' }).addTo(map);
+    controlsRef.current.scale = L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
     
 // Polyline Measure Control
   controlsRef.current.measure = (L.control as any).polylineMeasure({
     position: 'topleft',
-    unit: 'kilometres',
-    units: ['metres', 'kilometres', 'nauticalmiles', 'miles'],
+    unit: 'metres',
+    units: ['metres', 'kilometres'],
     showBearings: true,
     clearMeasurementsOnStop: false,
     showClearControl: true,
@@ -126,10 +126,23 @@ const MapsPage = () => {
     controlsRef.current.cluster = (L as any).markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 18 });
     map.addLayer(controlsRef.current.cluster);
 
-    controlsRef.current.search = new (L.Control as any).Search({ position: 'topright', layer: controlsRef.current.cluster, propertyName: 'title', moveToLocation: (latlng: L.LatLng, t: any, m: L.Map) => m.setView(latlng, 18) }).addTo(map);
+    controlsRef.current.search = new (L.Control as any).Search({ 
+      position: 'topright', 
+      layer: controlsRef.current.cluster, 
+      propertyName: 'title', 
+      initial: true,
+      autocomplete: true,
+      minLength: 1,
+      marker: false,
+      moveToLocation: (latlng: L.LatLng, t: any, m: L.Map) => m.setView(latlng, 18) 
+    }).addTo(map);
     controlsRef.current.easy = (L as any).easyButton('<span>🙈</span>', (btn: any) => { 
       if (map.hasLayer(controlsRef.current.cluster)) { map.removeLayer(controlsRef.current.cluster); btn.button.innerHTML = '<span>👁️</span>'; } 
       else { map.addLayer(controlsRef.current.cluster); btn.button.innerHTML = '<span>🙈</span>'; }
+    }).addTo(map);
+
+    (L as any).easyButton('<span>🏠</span>', () => {
+      map.setView(initialCenter, 13);
     }).addTo(map);
 
     if ((L.control as any).fullscreen) (L.control as any).fullscreen({ position: 'topleft' }).addTo(map);
@@ -225,18 +238,20 @@ const MapsPage = () => {
     if (!cluster || !mapInstanceRef.current) return;
     cluster.clearLayers();
     visibleMarkers.forEach(item => {
-      const isBlue = item.type === 'nodeb' || item.transport?.toLowerCase().includes('metro');
-      const marker = L.marker(item.coordinates, { icon: isBlue ? blueIcon : orangeIcon, title: item.site_id });
+      console.log('Rendering marker:', item.type, item.site_id);
+      const isBlue = item.type === 'nodeb' || (item.transport && item.transport.toLowerCase().includes('metro'));
+      const marker = L.marker(item.coordinates, { icon: isBlue ? blueIcon : orangeIcon, title: `${item.site_id} ${item.site_name}` });
       const div = L.DomUtil.create('div', 'text-[11px] space-y-1 w-48');
       div.innerHTML = `<b>Site ID :</b> ${item.site_id}<br><b>Site Name :</b> ${item.site_name}<br><b>Transport :</b> ${item.transport || 'Metro-E'}<br><b>Coord :</b> ${item.coordinates.join(',')}<br>
         <div class="flex flex-col gap-1 mt-2 border-t pt-2">
-          <a target="_blank" href="/wan/${item.type==='nodeb'?'nodeb':'allnodeb'}/detail/${item.idnodeb}" class="text-blue-500 font-bold">View Detail</a>
+          <button class="v-d-btn bg-blue-600 text-white p-1 rounded" data-url="/wan/${item.type==='nodeb'?'nodeb':'allnodeb'}/detail/${item.type==='nodeb'?item.idnodeb:item.site_id}/${slugify(`${item.site_id} ${item.site_name}`)}">View Detail</button>
           <button class="m-f-btn bg-purple-600 text-white p-1 rounded">Measure From Here</button>
           <button class="m-t-btn bg-yellow-600 text-white p-1 rounded">Measure To Here</button>
           <button class="g-m-btn bg-red-600 text-white p-1 rounded">Google Maps</button>
         </div>`;
       L.DomEvent.on(div, 'click', (e: any) => {
         const t = e.target as HTMLElement;
+        if (t.classList.contains('v-d-btn')) { window.open(t.getAttribute('data-url') || '', '_blank'); }
         if (t.classList.contains('m-f-btn')) { 
           setMeasurementStartPoint(item.coordinates); 
           mapInstanceRef.current?.closePopup(); 

@@ -1,11 +1,3 @@
-# Environment & Credentials
-.env
-.env.local
-.env.*.local
-.secret
-credentials.json
-
-# Dependencies
 node_modules/
 .venv/
 __pycache__/
@@ -27,11 +19,4 @@ temp_data.sql
 Thumbs.db
 *.bak
 *.swp
-
-# Migration scripts/data (if they contain dumps)
-legacy/ops_db.sql
-temp_orbit/
-migrate_*.py
-a.txt
-b.txt
-c.txt
+nul

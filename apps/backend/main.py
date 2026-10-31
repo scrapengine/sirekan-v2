@@ -5,6 +5,7 @@ from core.config import settings
 
 from assurance.router import router as assurance_router
 from master_data.router import router as master_data_router
+from master_data.router_infra import router as infra_router
 from core.auth_router import router as auth_router
 from core.admin_router import router as admin_router
 from core.worker_router import router as worker_router
@@ -34,6 +35,7 @@ app.add_middleware(
 
 app.include_router(assurance_router)
 app.include_router(master_data_router, prefix="/api")
+app.include_router(infra_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(worker_router, prefix="/api")

@@ -1,3 +1,4 @@
+import { infraNavigation } from "./navigation_infra"
 import { wanNavigation } from "./navigation_wan"
 import {
   LayoutDashboard,
@@ -18,6 +19,7 @@ export const navigation: NavSection[] = [
       { label: 'Assurance Tickets', icon: BarChart3, href: '/assurance/tickets' },
     ],
   },
+  infraNavigation,
   wanNavigation,
   {
     title: 'Overview',

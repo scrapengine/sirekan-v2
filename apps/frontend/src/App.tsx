@@ -11,37 +11,60 @@ import { SignInPage } from '@/pages/auth/SignInPage'
 import { SignUpPage } from '@/pages/auth/SignUpPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ComponentsPage } from '@/pages/components/ComponentsPage'
-import { NodeBTable } from '@/pages/wan/NodeBPage';
-import { NodeBDetailPage } from '@/pages/wan/NodeBDetailPage';
-import { NodeBEditPage } from '@/pages/wan/NodeBEditPage';
-import { NodeBAddPage } from '@/pages/wan/NodeBAddPage';
-import { NodeBTrashPage } from '@/pages/wan/NodeBTrashPage';
-import { WanPage } from '@/pages/wan/WanPlaceholder';
-import { AssuranceTicketList } from '@/features/assurance/pages/AssuranceTicketList';
-import { AssuranceTicketDetail } from '@/features/assurance/pages/AssuranceTicketDetail';
+import { NodeBTable } from '@/pages/wan/NodeBPage'
+import { NodeBDetailPage } from '@/pages/wan/NodeBDetailPage'
+import { NodeBEditPage } from '@/pages/wan/NodeBEditPage'
+import { NodeBAddPage } from '@/pages/wan/NodeBAddPage'
+import { NodeBTrashPage } from '@/pages/wan/NodeBTrashPage'
+import MapsPage from '@/pages/wan/MapsPage'
+import { AllNodebPage } from '@/pages/wan/AllNodebPage'
+import { MetroPage } from '@/pages/infra/MetroPage'
+import { MetroAddPage } from '@/pages/infra/MetroAddPage'
+import { MetroEditPage } from '@/pages/infra/MetroEditPage'
+import { MetroTrashPage } from '@/pages/infra/MetroTrashPage'
+import { OLTPage } from '@/pages/infra/OLTPage'
+import { OLTTrashPage } from '@/pages/infra/OLTTrashPage'
+import { OLTAddPage } from '@/pages/infra/OLTAddPage'
+import { OLTEditPage } from '@/pages/infra/OLTEditPage'
+import { OLTDetailPage } from '@/pages/infra/OLTDetailPage'
+import { STOPage } from '@/pages/infra/STOPage'
+import { STOAddPage } from '@/pages/infra/STOAddPage'
+import { STOEditPage } from '@/pages/infra/STOEditPage'
+import { STODetailPage } from '@/pages/infra/STODetailPage'
+import { STOTrashPage } from '@/pages/infra/STOTrashPage'
+import { AssuranceTicketList } from '@/features/assurance/pages/AssuranceTicketList'
+import { AssuranceTicketDetail } from '@/features/assurance/pages/AssuranceTicketDetail'
+
+const WanPage = ({ title }: { title: string }) => <div>{title}</div>
 
 export default function App() {
-  const location = useLocation();
-
+  const location = useLocation()
   useEffect(() => {
     const titles: { [key: string]: string } = {
-      '/wan/nodeb': 'NODE-B',
-      '/wan/nodeb/add': 'NODE-B ADD',
-      '/wan/nodeb/trash': 'NODE-B TRASH',
-      '/wan/olt': 'OLT',
-      '/wan/metro': 'METRO'
-    };
-    document.title = titles[location.pathname] || 'Sirekan';
-  }, [location]);
+          '/wan/nodeb': 'NODE-B',
+          '/wan/nodeb/add': 'NODE-B ADD',
+          '/wan/nodeb/trash': 'NODE-B TRASH',
+          '/metro': 'METRO',
+          '/metro/add': 'METRO ADD',
+          '/metro/edit': 'METRO EDIT',
+          '/metro/trash': 'METRO TRASH',
+          '/olt': 'OLT',
+          '/olt/trash': 'OLT TRASH',
+          '/olt/add': 'OLT ADD',
+          '/olt/edit': 'OLT EDIT',
+          '/olt/detail': 'OLT DETAIL',
+          '/sto': 'STO',
+          '/sto/add': 'STO ADD',
+          '/sto/trash': 'STO TRASH'
+        }
+    document.title = titles[location.pathname] || 'Sirekan'
+  }, [location])
 
   return (
     <Routes>
-      {/* Auth routes — no sidebar layout */}
       <Route path="/sign-in" element={<SignInPage />} />
       <Route path="/sign-up" element={<SignUpPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-
-      {/* Main app routes — with sidebar layout */}
       <Route element={<Layout />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -55,15 +78,28 @@ export default function App() {
         <Route path="/assurance/tickets/:incident" element={<AssuranceTicketDetail />} />
         <Route path="/wan/assurance" element={<WanPage title="WAN Assurance" />} />
         <Route path="/wan/fulfillment" element={<WanPage title="WAN Fulfillment" />} />
-        <Route path="/wan/allnodeb" element={<WanPage title="WAN NodeB All" />} />
+        <Route path="/wan/allnodeb" element={<AllNodebPage />} />
         <Route path="/wan/nodeb" element={<NodeBTable />} />
         <Route path="/wan/nodeb/add" element={<NodeBAddPage />} />
         <Route path="/wan/nodeb/trash" element={<NodeBTrashPage />} />
         <Route path="/wan/nodeb/detail/:id/:slug" element={<NodeBDetailPage />} />
         <Route path="/wan/nodeb/edit/:id" element={<NodeBEditPage />} />
-        <Route path="/wan/olt" element={<WanPage title="WAN OLT" />} />
+        <Route path="/wan/maps" element={<MapsPage />} />
+        <Route path="/metro" element={<MetroPage />} />
+        <Route path="/metro/add" element={<MetroAddPage />} />
+        <Route path="/metro/edit/:hostname" element={<MetroEditPage />} />
+        <Route path="/metro/trash" element={<MetroTrashPage />} />
+        <Route path="/olt" element={<OLTPage />} />
+        <Route path="/olt/trash" element={<OLTTrashPage />} />
+        <Route path="/olt/add" element={<OLTAddPage />} />
+        <Route path="/olt/edit/:hostname_olt" element={<OLTEditPage />} />
+        <Route path="/olt/detail/:hostname_olt" element={<OLTDetailPage />} />
+        <Route path="/sto" element={<STOPage />} />
+        <Route path="/sto/add" element={<STOAddPage />} />
+        <Route path="/sto/edit/:id" element={<STOEditPage />} />
+        <Route path="/sto/detail/:id" element={<STODetailPage />} />
+        <Route path="/sto/trash" element={<STOTrashPage />} />
         <Route path="/wan/ont" element={<WanPage title="WAN ONT" />} />
-        <Route path="/wan/metro" element={<WanPage title="WAN Metro" />} />
         <Route path="/wan/olo" element={<WanPage title="WAN OLO" />} />
       </Route>
     </Routes>
