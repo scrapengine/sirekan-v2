@@ -257,6 +257,9 @@ export const OLTPage: React.FC = () => {
               <Button size="sm" variant="outline" onClick={handleExport}>
                 <Download size={14} className="mr-1"/> Export
               </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowImportModal(true)}>
+                <Upload size={14} className="mr-1"/> Import
+              </Button>
               <Button size="sm" variant="secondary" onClick={handleFilterReset}>
                 Reset Filters
               </Button>
@@ -373,6 +376,27 @@ export const OLTPage: React.FC = () => {
           </div>
         </div>
       </Card>
+      
+      {showImportModal && (
+        <Modal isOpen={showImportModal} onClose={() => setShowImportModal(false)} title="Import OLT Data">
+          <div className="space-y-4">
+            <p className="text-xs text-slate-400">Upload file Excel (.xlsx / .xls) untuk import data OLT.</p>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              accept=".xlsx, .xls"
+              className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-orbit-surface file:text-slate-100 hover:file:bg-white/10"
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button size="sm" variant="ghost" onClick={() => setShowImportModal(false)}>Cancel</Button>
+              <Button size="sm" onClick={() => {
+                const file = fileInputRef.current?.files?.[0];
+                if (file) handleImport(file);
+              }}>Import Now</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
